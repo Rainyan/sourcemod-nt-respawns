@@ -1,0 +1,31 @@
+"Games"
+{
+	"NeotokyoSource"
+	{
+		"Signatures"
+		{
+			"Sig_CNEOPlayer__OnPlayerDeath"
+			{
+				"library"	"server"
+				"windows"	"\x81\xEC\x90\x00\x00\x00\x56\x57"
+			}
+		}
+		"Functions"
+		{
+			"Fn_CNEOPlayer__OnPlayerDeath"
+			{
+				"signature"	"Sig_CNEOPlayer__OnPlayerDeath"
+				"callconv"	"thiscall"
+				"this"		"entity"
+				"return"	"int"
+				"arguments"
+				{
+					"take_dmg_info"
+					{
+						"type"	"objectptr"
+					}
+				}
+			}
+		}
+	}
+}
