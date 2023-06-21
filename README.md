@@ -12,4 +12,4 @@ Neotokyo plugin that adds respawns to the CTG mode. **Experimental plugin, weird
 
 ## Usage
 ### Cvars
-* `sm_nt_respawn_time_seconds` — (integer) How many seconds until players will respawn. Must be >0 and should be less than the round length (currently there is not respawn canceling at new round start)
+* `sm_nt_respawn_time_seconds` — (integer) How many seconds until players will respawn. Must be >0 and should be less than the round length (currently there is **no** respawn canceling at new round start!)
