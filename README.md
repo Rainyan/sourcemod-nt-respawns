@@ -1,7 +1,8 @@
 # sourcemod-nt-respawns
 Neotokyo plugin that adds respawns to the CTG mode. **Experimental plugin, weirdness may occur!**
 
-## Example video
+### Example
+Video size about 90 MB
 
 [gh_respawns_example.webm](https://github.com/Rainyan/sourcemod-nt-respawns/assets/6595066/e4b03074-550e-4b13-98cd-458a013b2033)
 
