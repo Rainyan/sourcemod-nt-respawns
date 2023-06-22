@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.6.0"
+#define PLUGIN_VERSION "0.6.1"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -128,6 +128,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 		{
 			SetFailState("SDK hook failed");
 		}
+		return;
 	}
 	for (; i < sizeof(weapons_primary); ++i)
 	{
