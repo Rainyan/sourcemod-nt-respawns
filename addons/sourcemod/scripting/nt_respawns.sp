@@ -105,7 +105,7 @@ public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hPara
 	// Need to strip guns because the player's attachments will remain visible,
 	// (or alternatively need to drop them in the world).
 	int weps_size = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
-	char classname[32];
+	char classname[12 + 1];
 	for (int i = 0; i < weps_size; ++i)
 	{
 		int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
