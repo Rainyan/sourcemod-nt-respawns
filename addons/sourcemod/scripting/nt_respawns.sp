@@ -1,4 +1,5 @@
 #include <sourcemod>
+#include <sdkhooks>
 #include <sdktools>
 #include <dhooks>
 
@@ -7,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.1.0"
+#define PLUGIN_VERSION "0.2.0"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -20,6 +21,20 @@
 // Remember to update all format calls if you change this
 #define RESPAWN_PHRASE "— RESPAWNING IN %d —"
 
+#if SOURCEMOD_V_MAJOR > 1
+#define SUPPORTS_DROP_BYPASSHOOKS
+#endif
+#if SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR > 12
+#define SUPPORTS_DROP_BYPASSHOOKS
+#endif
+#if SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR == 12 && SOURCEMOD_V_REV >= 6961
+#define SUPPORTS_DROP_BYPASSHOOKS
+#endif
+
+#if !defined(SUPPORTS_DROP_BYPASSHOOKS)
+static Handle g_hForwardDrop = INVALID_HANDLE;
+#endif
+
 ConVar g_cRespawnTimeSecs = null;
 
 public Plugin myinfo = {
@@ -30,7 +45,11 @@ public Plugin myinfo = {
 	url = "https://github.com/Rainyan/sourcemod-nt-respawns"
 };
 
+#if defined(SUPPORTS_DROP_BYPASSHOOKS)
 public void OnPluginStart()
+#else
+public void OnAllPluginsLoaded()
+#endif
 {
 	GameData gd = LoadGameConfigFile("neotokyo/respawns");
 	if (!gd)
@@ -50,6 +69,10 @@ public void OnPluginStart()
 
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
 		"How many seconds until players will respawn", _, true, 1.0);
+
+#if !defined(SUPPORTS_DROP_BYPASSHOOKS)
+	g_hForwardDrop = CreateGlobalForward("OnGhostDrop", ET_Event, Param_Cell);
+#endif
 }
 
 public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hParams)
@@ -73,9 +96,53 @@ public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hPara
 	SetEntityFlags(client, GetEntityFlags(client) | FL_GODMODE);
 
 	SetInvisible(client, true);
+
 	// Need to strip guns because the player's attachments will remain visible,
 	// (or alternatively need to drop them in the world).
-	StripPlayerWeapons(client, true);
+	int weps_size = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
+	char classname[32];
+	for (int i = 0; i < weps_size; ++i)
+	{
+		int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
+		if (weapon == -1)
+		{
+			continue;
+		}
+		if (!GetEntityClassname(weapon, classname, sizeof(classname)))
+		{
+			continue;
+		}
+
+		// Don't destroy the ghost; instead drop it to the world
+		if (StrEqual(classname, "weapon_ghost"))
+		{
+			PrintToServer("Found ghost as wep %d", weapon);
+
+			// For versions of SM that don't support reporting the weapon drop
+			// via the call, we need to manually call the nt_ghostdrop forward.
+			// This is kind of nasty but necessary for other plugins that rely
+			// on this info.
+
+#if defined(SUPPORTS_DROP_BYPASSHOOKS)
+			SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR,
+				false);
+#else
+			SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR);
+
+			Call_StartForward(g_hForwardDrop);
+			Call_PushCell(client);
+			Call_Finish();
+#endif
+			continue;
+		}
+		// Because most servers run plugins for weapons that never de-spawn,
+		// explicitly destroy our guns to avoid overflowing the entity limit
+		// for extended gameplay. A more elegant approach would be enforcing
+		// the original NT's weapon de-spawning for when we are loaded, so
+		// players can restock ammo by looting.
+		RemovePlayerItem(client, weapon);
+		RemoveEdict(weapon);
+	}
 
 	CreateRagdoll(client);
 
@@ -234,8 +301,11 @@ public Action Timer_DeferFakeDeath(Handle timer, DataPack data)
 	SetEntProp(client, Prop_Data, "m_bitsHUDDamage", -1);
 	SetEntProp(client, Prop_Data, "m_takedamage", DAMAGE_YES);
 	SetEntityMoveType(client, MOVETYPE_WALK);
-	SetEntPropVector(client, Prop_Data, "m_vecCameraPVSOrigin", { 0.0, 0.0, 0.0 });
-	SetEntPropVector(client, Prop_Data, "m_HackedGunPos", { 0.0, 32.0, 0.0 });
+	// declaring as variables for older sm compat
+	float campvsorigin[3];
+	float hackedgunpos[3] = { 0.0, 32.0, 0.0 };
+	SetEntPropVector(client, Prop_Data, "m_vecCameraPVSOrigin", campvsorigin);
+	SetEntPropVector(client, Prop_Data, "m_HackedGunPos", hackedgunpos);
 	SetEntProp(client, Prop_Data, "m_bPlayerUnderwater", false);
 	SetEntProp(client, Prop_Data, "m_iTrain", TRAIN_NEW);
 
