@@ -26,6 +26,7 @@ If applicable, add screenshots to help explain your problem.
 The output of server command: `sm plugins info nt_respawns`
 
 ```
+**THIS IS AN EXAMPLE, PLEASE REPLACE WITH YOUR REAL SRCDS PLUGIN INFO**
 ] sm plugins info nt_respawns
   Filename: nt_respawns.smx
   Title: NT Respawns (Respawning for Neotokyo CTG mode)
