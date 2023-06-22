@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.4.0"
+#define PLUGIN_VERSION "0.5.0"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -36,6 +36,8 @@ static Handle g_hForwardDrop = INVALID_HANDLE;
 #endif
 
 ConVar g_cRespawnTimeSecs, g_cNoWeaponsDespawn;
+
+bool g_bIsWaitingToRespawn[NEO_MAXPLAYERS + 1];
 
 public Plugin myinfo = {
 	name = "NT Respawns",
@@ -75,6 +77,79 @@ public void OnAllPluginsLoaded()
 #if !defined(SUPPORTS_DROP_BYPASSHOOKS)
 	g_hForwardDrop = CreateGlobalForward("OnGhostDrop", ET_Event, Param_Cell);
 #endif
+
+	if (!HookEventEx("game_round_start", OnRoundStart))
+	{
+		SetFailState("Failed to hook event");
+	}
+}
+
+public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+	for (int client = 1; client <= MaxClients; ++client)
+	{
+		g_bIsWaitingToRespawn[client] = false;
+	}
+}
+
+public void OnEntityCreated(int entity, const char[] classname)
+{
+	if (!IsValidEdict(entity))
+	{
+		return;
+	}
+
+	int i = 0;
+	for (; i < sizeof(weapons_primary); ++i)
+	{
+		if (StrEqual(classname, weapons_primary[i]))
+		{
+			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
+			{
+				SetFailState("SDK hook failed");
+			}
+			return;
+		}
+	}
+	for (i = 0; i < sizeof(weapons_secondary); ++i)
+	{
+		if (StrEqual(classname, weapons_secondary[i]))
+		{
+			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
+			{
+				SetFailState("SDK hook failed");
+			}
+			return;
+		}
+	}
+	for (i = 0; i < sizeof(weapons_grenade); ++i)
+	{
+		if (StrEqual(classname, weapons_grenade[i]))
+		{
+			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
+			{
+				SetFailState("SDK hook failed");
+			}
+			return;
+		}
+	}
+	if (StrEqual(classname, "weapon_knife"))
+	{
+		if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
+		{
+			SetFailState("SDK hook failed");
+		}
+	}
+}
+
+public void OnClientDisconnect_Post(int client)
+{
+	g_bIsWaitingToRespawn[client] = false;
+}
+
+public Action OnWeaponTouch(int weapon, int client)
+{
+	return g_bIsWaitingToRespawn[client] ? Plugin_Handled : Plugin_Continue;
 }
 
 void DropWeapon(int client, int weapon)
@@ -109,6 +184,8 @@ public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hPara
 	int		m_iDamageStats;
 	int		m_iAmmoType;
 	*/
+
+	g_bIsWaitingToRespawn[client] = true;
 
 	// prevent "dying" multiple times while pretend dead
 	SetEntityFlags(client, GetEntityFlags(client) | FL_GODMODE);
@@ -168,8 +245,7 @@ public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hPara
 	{
 		if (!GetEntityClassname(inflictor, weapon, sizeof(weapon)))
 		{
-			LogError("Failed to get classname of attacker");
-			return MRES_Ignored;
+			SetFailState("Failed to get classname of attacker");
 		}
 	}
 
@@ -275,6 +351,8 @@ public Action Timer_DeferFakeDeath(Handle timer, DataPack data)
 		return Plugin_Continue;
 	}
 	PrintCenterText(client, ""); // clear any lingering "RESPAWNING..." text
+
+	g_bIsWaitingToRespawn[client] = false;
 
 	// Places the NT player in the world
 	// TODO: figure out what this is
