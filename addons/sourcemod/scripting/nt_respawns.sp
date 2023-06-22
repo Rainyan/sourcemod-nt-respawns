@@ -100,17 +100,6 @@ public void OnEntityCreated(int entity, const char[] classname)
 	}
 
 	int i = 0;
-	for (; i < sizeof(weapons_primary); ++i)
-	{
-		if (StrEqual(classname, weapons_primary[i]))
-		{
-			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
-			{
-				SetFailState("SDK hook failed");
-			}
-			return;
-		}
-	}
 	for (i = 0; i < sizeof(weapons_secondary); ++i)
 	{
 		if (StrEqual(classname, weapons_secondary[i]))
@@ -138,6 +127,17 @@ public void OnEntityCreated(int entity, const char[] classname)
 		if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
 		{
 			SetFailState("SDK hook failed");
+		}
+	}
+	for (; i < sizeof(weapons_primary); ++i)
+	{
+		if (StrEqual(classname, weapons_primary[i]))
+		{
+			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
+			{
+				SetFailState("SDK hook failed");
+			}
+			return;
 		}
 	}
 }
