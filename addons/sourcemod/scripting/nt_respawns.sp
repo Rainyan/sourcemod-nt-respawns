@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.3.1"
+#define PLUGIN_VERSION "0.4.0"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -35,7 +35,7 @@
 static Handle g_hForwardDrop = INVALID_HANDLE;
 #endif
 
-ConVar g_cRespawnTimeSecs = null;
+ConVar g_cRespawnTimeSecs, g_cNoWeaponsDespawn;
 
 public Plugin myinfo = {
 	name = "NT Respawns",
@@ -64,19 +64,32 @@ void InitGameData()
 	CloseHandle(gd);
 }
 
-#if defined(SUPPORTS_DROP_BYPASSHOOKS)
-public void OnPluginStart()
-#else
 public void OnAllPluginsLoaded()
-#endif
 {
 	InitGameData();
 
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
 		"How many seconds until players will respawn", _, true, 1.0);
+	g_cNoWeaponsDespawn = FindConVar("sm_ntdrop_nodespawn");
 
 #if !defined(SUPPORTS_DROP_BYPASSHOOKS)
 	g_hForwardDrop = CreateGlobalForward("OnGhostDrop", ET_Event, Param_Cell);
+#endif
+}
+
+void DropWeapon(int client, int weapon)
+{
+// For versions of SM that don't support reporting the weapon drop via the call,
+// we need to manually call the nt_ghostdrop forward.
+// This is kind of nasty but necessary for other plugins that rely on this info.
+#if defined(SUPPORTS_DROP_BYPASSHOOKS)
+	SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR, false);
+#else
+	SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR);
+
+	Call_StartForward(g_hForwardDrop);
+	Call_PushCell(client);
+	Call_Finish();
 #endif
 }
 
@@ -102,6 +115,12 @@ public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hPara
 
 	SetInvisible(client, true);
 
+	// If the cvar is null, we're probably running an older version of the
+	// plugin which doesn't have this control exposed.
+	// TODO: should then ideally detect whether the plugin is actually running
+	bool must_kill_weps = ((g_cNoWeaponsDespawn == null) ||
+		g_cNoWeaponsDespawn.BoolValue);
+
 	// Need to strip guns because the player's attachments will remain visible,
 	// (or alternatively need to drop them in the world).
 	int weps_size = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
@@ -113,40 +132,30 @@ public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hPara
 		{
 			continue;
 		}
-		if (!GetEntityClassname(weapon, classname, sizeof(classname)))
+
+		if (must_kill_weps)
 		{
-			continue;
-		}
+			if (!GetEntityClassname(weapon, classname, sizeof(classname)))
+			{
+				continue;
+			}
 
-		// Don't destroy the ghost; instead drop it to the world
-		if (StrEqual(classname, "weapon_ghost"))
+			// Don't destroy the ghost; instead drop it to the world
+			if (StrEqual(classname, "weapon_ghost"))
+			{
+				DropWeapon(client, weapon);
+				continue;
+			}
+			// Because most servers run plugins for weapons that never de-spawn,
+			// explicitly destroy our guns to avoid overflowing the entity limit
+			// for extended gameplay.
+			RemovePlayerItem(client, weapon);
+			RemoveEdict(weapon);
+		}
+		else
 		{
-			PrintToServer("Found ghost as wep %d", weapon);
-
-			// For versions of SM that don't support reporting the weapon drop
-			// via the call, we need to manually call the nt_ghostdrop forward.
-			// This is kind of nasty but necessary for other plugins that rely
-			// on this info.
-
-#if defined(SUPPORTS_DROP_BYPASSHOOKS)
-			SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR,
-				false);
-#else
-			SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR);
-
-			Call_StartForward(g_hForwardDrop);
-			Call_PushCell(client);
-			Call_Finish();
-#endif
-			continue;
+			DropWeapon(client, weapon);
 		}
-		// Because most servers run plugins for weapons that never de-spawn,
-		// explicitly destroy our guns to avoid overflowing the entity limit
-		// for extended gameplay. A more elegant approach would be enforcing
-		// the original NT's weapon de-spawning for when we are loaded, so
-		// players can restock ammo by looting.
-		RemovePlayerItem(client, weapon);
-		RemoveEdict(weapon);
 	}
 
 	CreateRagdoll(client);
