@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.3.0"
+#define PLUGIN_VERSION "0.3.1"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -269,7 +269,7 @@ public Action Timer_DeferFakeDeath(Handle timer, DataPack data)
 
 	// Places the NT player in the world
 	// TODO: figure out what this is
-	Handle call = INVALID_HANDLE;
+	static Handle call = INVALID_HANDLE;
 	if (call == INVALID_HANDLE)
 	{
 		StartPrepSDKCall(SDKCall_Player);
