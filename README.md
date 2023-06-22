@@ -1,6 +1,8 @@
 # sourcemod-nt-respawns
 Neotokyo plugin that adds respawns to the CTG mode. **Experimental plugin, weirdness may occur!**
 
+If you encounter a bug, please consider [creating a bug report for it](https://github.com/Rainyan/sourcemod-nt-respawns/issues/new/choose)!
+
 ### Example
 [nt_respawns_example.webm](https://github.com/Rainyan/sourcemod-nt-respawns/assets/6595066/40307a50-5c2d-443d-be5d-94d4dd4d2259)
 
@@ -16,6 +18,3 @@ Neotokyo plugin that adds respawns to the CTG mode. **Experimental plugin, weird
 ## Usage
 ### Cvars
 * `sm_nt_respawn_time_seconds` — (integer) How many seconds until players will respawn. Must be >0 and should be less than the round length (currently there is **no** respawn canceling at new round start!)
-
-## Bug reports
-If you encounter a bug, please consider [creating a bug report for it](https://github.com/Rainyan/sourcemod-nt-respawns/issues/new/choose)!
