@@ -13,7 +13,7 @@ If you encounter a bug, please consider [creating a bug report for it](https://g
 
 ## Installation
 * Place [the gamedata file](addons/sourcemod/gamedata/neotokyo/) to the `addons/sourcemod/gamedata/neotokyo` folder (create the "neotokyo" folder if it doesn't exist).
-* Compile the plugin, and place the .smx binary file to `addons/sourcemod/plugins`
+* Compile [the plugin](addons/sourcemod/scripting), and place the .smx binary file to `addons/sourcemod/plugins`
 
 ## Usage
 ### Cvars
