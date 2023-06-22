@@ -7,6 +7,9 @@ assignees: ''
 
 ---
 
+**Before reporting**
+- [ ] I have checked this bug isn't already reported in [the issues list](https://github.com/Rainyan/sourcemod-nt-respawns/issues)
+
 **Describe the bug**
 A clear and concise description of what the bug is.
 
