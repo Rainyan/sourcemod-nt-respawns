@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.6.1"
+#define PLUGIN_VERSION "0.6.2"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -100,7 +100,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 	}
 
 	int i = 0;
-	for (i = 0; i < sizeof(weapons_secondary); ++i)
+	for (; i < sizeof(weapons_secondary); ++i)
 	{
 		if (StrEqual(classname, weapons_secondary[i]))
 		{
@@ -130,7 +130,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 		}
 		return;
 	}
-	for (; i < sizeof(weapons_primary); ++i)
+	for (i = 0; i < sizeof(weapons_primary); ++i)
 	{
 		if (StrEqual(classname, weapons_primary[i]))
 		{
