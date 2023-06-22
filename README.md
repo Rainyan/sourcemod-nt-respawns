@@ -5,7 +5,7 @@ Neotokyo plugin that adds respawns to the CTG mode. **Experimental plugin, weird
 [nt_respawns_example.webm](https://github.com/Rainyan/sourcemod-nt-respawns/assets/6595066/40307a50-5c2d-443d-be5d-94d4dd4d2259)
 
 ## Build requirements
-* SourceMod 1.10 or newer
+* SourceMod 1.8 or newer
   * **If using SourceMod older than 1.11**: you also need [the DHooks extension](https://forums.alliedmods.net/showpost.php?p=2588686). Download links are at the bottom of the opening post of the AlliedMods thread. Be sure to choose the correct one for your SM version! You don't need this if you're using SourceMod 1.11 or newer.
 * [Neotokyo include](https://github.com/softashell/sourcemod-nt-include), version 1.0 or newer
 
