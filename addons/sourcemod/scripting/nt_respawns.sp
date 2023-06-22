@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.5.0"
+#define PLUGIN_VERSION "0.6.0"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -145,6 +145,19 @@ public void OnEntityCreated(int entity, const char[] classname)
 public void OnClientDisconnect_Post(int client)
 {
 	g_bIsWaitingToRespawn[client] = false;
+}
+
+public Action OnPlayerRunCmd(int client, int& buttons, int& impulse,
+	float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum,
+	int& tickcount, int& seed, int mouse[2])
+{
+	if (g_bIsWaitingToRespawn[client])
+	{
+		// Don't allow dead respawn waiters to use buttons other than these
+#define ALLOWED_BUTTONS (IN_SCORE)
+		buttons &= ALLOWED_BUTTONS;
+	}
+	return Plugin_Continue;
 }
 
 public Action OnWeaponTouch(int weapon, int client)
