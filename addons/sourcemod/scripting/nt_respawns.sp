@@ -8,7 +8,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.2.0"
+#define PLUGIN_VERSION "0.3.0"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
@@ -45,13 +45,9 @@ public Plugin myinfo = {
 	url = "https://github.com/Rainyan/sourcemod-nt-respawns"
 };
 
-#if defined(SUPPORTS_DROP_BYPASSHOOKS)
-public void OnPluginStart()
-#else
-public void OnAllPluginsLoaded()
-#endif
+void InitGameData()
 {
-	GameData gd = LoadGameConfigFile("neotokyo/respawns");
+	Handle gd = LoadGameConfigFile("neotokyo/respawns");
 	if (!gd)
 	{
 		SetFailState("Failed to load GameData");
@@ -65,7 +61,16 @@ public void OnAllPluginsLoaded()
 	{
 		SetFailState("Failed to detour");
 	}
-	delete gd;
+	CloseHandle(gd);
+}
+
+#if defined(SUPPORTS_DROP_BYPASSHOOKS)
+public void OnPluginStart()
+#else
+public void OnAllPluginsLoaded()
+#endif
+{
+	InitGameData();
 
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
 		"How many seconds until players will respawn", _, true, 1.0);
