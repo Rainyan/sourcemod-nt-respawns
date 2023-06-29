@@ -17,7 +17,7 @@ If you encounter a bug, please consider [creating a bug report for it](https://g
 
 ## Usage
 ### Cvars
-* `sm_nt_respawn_time_seconds` — (integer) How many seconds until players will respawn. Must be >0 and should be less than the round length (currently there is **no** respawn canceling at new round start!)
+* `sm_nt_respawn_time_seconds` — (integer) How many seconds until players will respawn. Must be >0 and should be less than the round length (currently there is [**no** respawn canceling](https://github.com/Rainyan/sourcemod-nt-respawns/issues/4) at new round start!)
 
 ### Ability to loot weapons/ammo
 You'll need the [nt_drop plugin](https://github.com/softashell/nt-sourcemod-plugins/blob/master/scripting/nt_drop.sp), version 0.8.0 or newer. Set its cvar `sm_ntdrop_nodespawn` to value `0` (it defaults to `1`). This will allow weapons dropped in the world to de-spawn after 30 seconds, which is necessary in respawn mode to avoid spawning too many objects in the world for the engine to handle.
