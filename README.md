@@ -3,6 +3,8 @@ Neotokyo plugin that adds respawns to the CTG mode. **Experimental plugin, weird
 
 If you encounter a bug, please consider [creating a bug report for it](https://github.com/Rainyan/sourcemod-nt-respawns/issues/new/choose)!
 
+Additional plugin for custom respawn locations [is available here](https://github.com/Rainyan/sourcemod-nt-spawn-locations).
+
 ### Example
 [nt_respawns_example.webm](https://github.com/Rainyan/sourcemod-nt-respawns/assets/6595066/40307a50-5c2d-443d-be5d-94d4dd4d2259)
 
