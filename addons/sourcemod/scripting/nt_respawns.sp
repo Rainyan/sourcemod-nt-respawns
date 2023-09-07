@@ -8,14 +8,13 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.6.2"
+#define PLUGIN_VERSION "0.6.3"
 
 #define LIFE_ALIVE 0
 #define OBS_MODE_NONE 0
 #define DAMAGE_YES 2
 #define TRAIN_NEW 0xc0
 #define SOLID_BBOX 2
-
 #define EF_NODRAW 0x020
 
 // Remember to update all format calls if you change this
@@ -161,9 +160,14 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse,
 	return Plugin_Continue;
 }
 
-public Action OnWeaponTouch(int weapon, int client)
+public Action OnWeaponTouch(int entity, int other)
 {
-	return g_bIsWaitingToRespawn[client] ? Plugin_Handled : Plugin_Continue;
+	// Did not touch client
+	if (other < 1 || other > MaxClients)
+	{
+		return Plugin_Continue;
+	}
+	return g_bIsWaitingToRespawn[other] ? Plugin_Handled : Plugin_Continue;
 }
 
 void DropWeapon(int client, int weapon)
