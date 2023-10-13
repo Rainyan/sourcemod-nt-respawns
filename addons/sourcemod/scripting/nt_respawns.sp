@@ -85,6 +85,9 @@ public void OnPluginEnd()
 
 public void OnClientPutInServer(int client)
 {
+	// Note that you should *not* pair this with OnClientDisconnect;
+	// the DeadTools base plugin will remove the client index downable bitflag
+	// automatically for us.
 	DeadTools_SetIsDownable(client, true);
 }
 
