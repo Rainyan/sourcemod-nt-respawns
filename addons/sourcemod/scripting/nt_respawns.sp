@@ -1,362 +1,130 @@
 #include <sourcemod>
-#include <sdkhooks>
-#include <sdktools>
-#include <dhooks>
 
 #include <neotokyo>
+
+#include "nt_deadtools/nt_deadtools_natives"
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "0.6.3"
+ConVar g_cRespawnTimeSecs;
 
-#define LIFE_ALIVE 0
-#define OBS_MODE_NONE 0
-#define DAMAGE_YES 2
-#define TRAIN_NEW 0xc0
-#define SOLID_BBOX 2
-#define EF_NODRAW 0x020
+static bool g_bLateLoad;
+static int g_iOldClientDeadToolsBits[NEO_MAXPLAYERS + 1];
+
+#define PLUGIN_VERSION "1.0.0"
 
 // Remember to update all format calls if you change this
 #define RESPAWN_PHRASE "— RESPAWNING IN %d —"
-
-#if SOURCEMOD_V_MAJOR > 1
-#define SUPPORTS_DROP_BYPASSHOOKS
-#endif
-#if SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR > 12
-#define SUPPORTS_DROP_BYPASSHOOKS
-#endif
-#if SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR == 12 && SOURCEMOD_V_REV >= 6961
-#define SUPPORTS_DROP_BYPASSHOOKS
-#endif
-
-#if !defined(SUPPORTS_DROP_BYPASSHOOKS)
-static Handle g_hForwardDrop = INVALID_HANDLE;
-#endif
-
-ConVar g_cRespawnTimeSecs, g_cNoWeaponsDespawn;
-
-bool g_bIsWaitingToRespawn[NEO_MAXPLAYERS + 1];
 
 public Plugin myinfo = {
 	name = "NT Respawns",
 	description = "Respawning for Neotokyo CTG mode",
 	author = "Rain",
 	version = PLUGIN_VERSION,
-	url = "https://github.com/Rainyan/sourcemod-nt-respawns"
+	url = "https://github.com/Rainyan/sourcemod-nt-deadtools"
 };
 
-void InitGameData()
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	Handle gd = LoadGameConfigFile("neotokyo/respawns");
-	if (!gd)
-	{
-		SetFailState("Failed to load GameData");
-	}
-	DynamicDetour dd = DynamicDetour.FromConf(gd, "Fn_CNEOPlayer__OnPlayerDeath");
-	if (!dd)
-	{
-		SetFailState("Failed to create detour");
-	}
-	if (!dd.Enable(Hook_Pre, PlayerKilled))
-	{
-		SetFailState("Failed to detour");
-	}
-	CloseHandle(gd);
+	g_bLateLoad = late;
+	return APLRes_Success;
 }
 
-public void OnAllPluginsLoaded()
+public void OnPluginStart()
 {
-	InitGameData();
-
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
-		"How many seconds until players will respawn", _, true, 1.0);
-	g_cNoWeaponsDespawn = FindConVar("sm_ntdrop_nodespawn");
+		"How many seconds until players will respawn", _, true, 0.0);
 
-#if !defined(SUPPORTS_DROP_BYPASSHOOKS)
-	g_hForwardDrop = CreateGlobalForward("OnGhostDrop", ET_Event, Param_Cell);
-#endif
-
-	if (!HookEventEx("game_round_start", OnRoundStart))
+	if (!HookEventEx("player_death", OnPlayerDeath))
 	{
 		SetFailState("Failed to hook event");
 	}
 }
 
-public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
+public void OnAllPluginsLoaded()
 {
+	DeadTools_VerifyApiVersion();
+
 	for (int client = 1; client <= MaxClients; ++client)
 	{
-		g_bIsWaitingToRespawn[client] = false;
-	}
-}
-
-public void OnEntityCreated(int entity, const char[] classname)
-{
-	if (!IsValidEdict(entity))
-	{
-		return;
-	}
-
-	int i = 0;
-	for (; i < sizeof(weapons_secondary); ++i)
-	{
-		if (StrEqual(classname, weapons_secondary[i]))
-		{
-			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
-			{
-				SetFailState("SDK hook failed");
-			}
-			return;
-		}
-	}
-	for (i = 0; i < sizeof(weapons_grenade); ++i)
-	{
-		if (StrEqual(classname, weapons_grenade[i]))
-		{
-			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
-			{
-				SetFailState("SDK hook failed");
-			}
-			return;
-		}
-	}
-	if (StrEqual(classname, "weapon_knife"))
-	{
-		if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
-		{
-			SetFailState("SDK hook failed");
-		}
-		return;
-	}
-	for (i = 0; i < sizeof(weapons_primary); ++i)
-	{
-		if (StrEqual(classname, weapons_primary[i]))
-		{
-			if (!SDKHookEx(entity, SDKHook_Touch, OnWeaponTouch))
-			{
-				SetFailState("SDK hook failed");
-			}
-			return;
-		}
-	}
-}
-
-public void OnClientDisconnect_Post(int client)
-{
-	g_bIsWaitingToRespawn[client] = false;
-}
-
-public Action OnPlayerRunCmd(int client, int& buttons, int& impulse,
-	float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum,
-	int& tickcount, int& seed, int mouse[2])
-{
-	if (g_bIsWaitingToRespawn[client])
-	{
-		// Don't allow dead respawn waiters to use buttons other than these
-#define ALLOWED_BUTTONS (IN_SCORE)
-		buttons &= ALLOWED_BUTTONS;
-	}
-	return Plugin_Continue;
-}
-
-public Action OnWeaponTouch(int entity, int other)
-{
-	// Did not touch client
-	if (other < 1 || other > MaxClients)
-	{
-		return Plugin_Continue;
-	}
-	return g_bIsWaitingToRespawn[other] ? Plugin_Handled : Plugin_Continue;
-}
-
-void DropWeapon(int client, int weapon)
-{
-// For versions of SM that don't support reporting the weapon drop via the call,
-// we need to manually call the nt_ghostdrop forward.
-// This is kind of nasty but necessary for other plugins that rely on this info.
-#if defined(SUPPORTS_DROP_BYPASSHOOKS)
-	SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR, false);
-#else
-	SDKHooks_DropWeapon(client, weapon, NULL_VECTOR, NULL_VECTOR);
-
-	Call_StartForward(g_hForwardDrop);
-	Call_PushCell(client);
-	Call_Finish();
-#endif
-}
-
-public MRESReturn PlayerKilled(int client, DHookReturn hReturn, DHookParam hParams)
-{
-	/* The first & only parameter is a CTakeDamageInfo, with the layout:
-	Vector	m_vecDamageForce; <-- offset 16 (4*sizeof(BYTE)); rest are contiguous
-	Vector	m_vecDamagePosition;
-	Vector	m_vecReportedPosition; // pos players are told damage is coming from
-	EHANDLE	m_hInflictor;
-	EHANDLE	m_hAttacker;
-	float	m_flDamage;
-	float	m_flMaxDamage;
-	float	m_flBaseDamage; // dmg before skill level adjustments; for uniform dmg forces
-	int		m_bitsDamageType;
-	int		m_iDamageCustom;
-	int		m_iDamageStats;
-	int		m_iAmmoType;
-	*/
-
-	g_bIsWaitingToRespawn[client] = true;
-
-	// prevent "dying" multiple times while pretend dead
-	SetEntityFlags(client, GetEntityFlags(client) | FL_GODMODE);
-
-	SetInvisible(client, true);
-
-	// If the cvar is null, we're probably running an older version of the
-	// plugin which doesn't have this control exposed.
-	// TODO: should then ideally detect whether the plugin is actually running
-	bool must_kill_weps = ((g_cNoWeaponsDespawn == null) ||
-		g_cNoWeaponsDespawn.BoolValue);
-
-	// Need to strip guns because the player's attachments will remain visible,
-	// (or alternatively need to drop them in the world).
-	int weps_size = GetEntPropArraySize(client, Prop_Send, "m_hMyWeapons");
-	char classname[12 + 1];
-	for (int i = 0; i < weps_size; ++i)
-	{
-		int weapon = GetEntPropEnt(client, Prop_Send, "m_hMyWeapons", i);
-		if (weapon == -1)
+		if (!IsClientInGame(client))
 		{
 			continue;
 		}
-
-		if (must_kill_weps)
+		g_iOldClientDeadToolsBits[client] = DeadTools_GetClientFlags(client);
+		if (g_bLateLoad)
 		{
-			if (!GetEntityClassname(weapon, classname, sizeof(classname)))
-			{
-				continue;
-			}
-
-			// Don't destroy the ghost; instead drop it to the world
-			if (StrEqual(classname, "weapon_ghost"))
-			{
-				DropWeapon(client, weapon);
-				continue;
-			}
-			// Because most servers run plugins for weapons that never de-spawn,
-			// explicitly destroy our guns to avoid overflowing the entity limit
-			// for extended gameplay.
-			RemovePlayerItem(client, weapon);
-			RemoveEdict(weapon);
-		}
-		else
-		{
-			DropWeapon(client, weapon);
+			DeadTools_SetIsDownable(client, true);
 		}
 	}
-
-	CreateRagdoll(client);
-
-	int inflictor = hParams.GetObjectVar(1, 13 * 4, ObjectValueType_Ehandle);
-	int attacker = hParams.GetObjectVar(1, 14 * 4, ObjectValueType_Ehandle);
-
-	char weapon[32] = "world";
-	if (client != attacker && attacker != 0 && IsValidEntity(inflictor))
-	{
-		if (!GetEntityClassname(inflictor, weapon, sizeof(weapon)))
-		{
-			SetFailState("Failed to get classname of attacker");
-		}
-	}
-
-#if(0) // just for completeness sake; these aren't needed for this
-	float dmg_force[3];
-	hParams.GetObjectVarVector(1, 4 * 4, ObjectValueType_Vector, dmg_force);
-	PrintToServer("dmg force: %f %f %f", dmg_force[0], dmg_force[1], dmg_force[2]);
-
-	float dmg_pos[3];
-	hParams.GetObjectVarVector(1, 7 * 4, ObjectValueType_Vector, dmg_pos);
-	PrintToServer("damage pos: %f %f %f", dmg_pos[0], dmg_pos[1], dmg_pos[2]);
-
-	float damage_reported_pos[3];
-	hParams.GetObjectVarVector(1, 10 * 4, ObjectValueType_Vector,
-		damage_reported_pos);
-	PrintToServer("damage reported pos: %f %f %f",
-		damage_reported_pos[0], damage_reported_pos[1], damage_reported_pos[2]);
-
-	float damage = hParams.GetObjectVar(1, 15 * 4, ObjectValueType_Float);
-	PrintToServer("damage: %f", damage);
-
-	float max_damage = hParams.GetObjectVar(1, 16 * 4, ObjectValueType_Float);
-	PrintToServer("max damage: %f", max_damage);
-
-	// seems to return bogus values for us(?); unused by the mod?
-	float base_damage = hParams.GetObjectVar(1, 17 * 4, ObjectValueType_Float);
-	PrintToServer("base damage: %f", base_damage);
-
-	int dmg_type = hParams.GetObjectVar(1, 18 * 4, ObjectValueType_Int);
-	PrintToServer("bits damage type: %d", dmg_type);
-
-	int dmg_custom = hParams.GetObjectVar(1, 19 * 4, ObjectValueType_Int);
-	PrintToServer("damage custom: %d", dmg_custom);
-
-	int dmg_stats = hParams.GetObjectVar(1, 20 * 4, ObjectValueType_Int);
-	PrintToServer("damage stats: %d", dmg_stats);
-
-	int ammo_type = hParams.GetObjectVar(1, 21 * 4, ObjectValueType_Int);
-	PrintToServer("ammo type: %d", ammo_type);
-#endif
-
-	DataPack data;
-	CreateDataTimer(1.0, Timer_DeferFakeDeath, data,
-		TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-	// -1 because we've already waited once here until the first callback
-	data.WriteCell(g_cRespawnTimeSecs.IntValue - 1);
-	data.WriteCell(GetClientUserId(client));
-	data.WriteString(weapon);
-	// Print the initial message instantly for a more responsive feel
-	PrintCenterText(client, RESPAWN_PHRASE, g_cRespawnTimeSecs.IntValue);
-
-	CreateFakeDeathEvent(
-		GetClientUserId(client),
-		GetClientUserId(attacker),
-		weapon
-	);
-
-	int score = 1;
-	if (GetClientTeam(client) == GetClientTeam(attacker))
-	{
-		score = -1;
-	}
-	SetPlayerXP(client, GetPlayerXP(client) + score);
-	SetPlayerDeaths(client, GetPlayerDeaths(client) + 1);
-
-	hReturn.Value = 0;
-
-	return MRES_Supercede;
 }
 
-void SetInvisible(int client, bool is_invisible)
+public void OnPluginEnd()
 {
-	if (is_invisible)
+	// TODO: This is kind of awkward and really we should rework the base
+	// DeadTools plugin design to take care of all of this automagically.
+	// But for now, this boilerplate is kind of required.
+	for (int client = 1; client <= MaxClients; ++client)
 	{
-		SetEntProp(client, Prop_Send, "m_fEffects",
-			GetEntProp(client, Prop_Send, "m_fEffects") | EF_NODRAW);
-	}
-	else
-	{
-		SetEntProp(client, Prop_Send, "m_fEffects",
-			GetEntProp(client, Prop_Send, "m_fEffects") & ~EF_NODRAW);
+		// This is required for now, because if we unload early after having
+		// declared this client "downable", they might end up with no plugin
+		// to handle that custom state, leaving the player in limbo.
+		//
+		// If the client was already declared as having the "downable" bits
+		// before we loaded, don't step on the toes of other plugins using it.
+		if (!(g_iOldClientDeadToolsBits[client] & DEADTOOLS_FLAG_DOWNABLE))
+		{
+			if (IsClientInGame(client))
+			{
+				DeadTools_SetIsDownable(client, false);
+			}
+		}
 	}
 }
 
-public Action Timer_DeferFakeDeath(Handle timer, DataPack data)
+public void OnClientPutInServer(int client)
+{
+	// Note that you should *not* pair this with OnClientDisconnect;
+	// the DeadTools base plugin will remove the client index downable bitflag
+	// automatically for us.
+	DeadTools_SetIsDownable(client, true);
+}
+
+public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (client == 0 ||
+		!(DeadTools_GetClientFlags(client) & DEADTOOLS_FLAG_DOWN))
+	{
+		return;
+	}
+
+	// So we can skip the "Respawning..." screen print stuff on <1 sec respawns
+	bool instant_revive = (g_cRespawnTimeSecs.FloatValue < 1);
+
+	// TODO: do we have to defer the revive here?? if not, could just call directly
+	DataPack data;
+	CreateDataTimer(instant_revive ? 0.1 : 1.0, Timer_Revive, data,
+		TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	// -1 because we've already waited once here until the first print callback
+	data.WriteCell(instant_revive ? 0 : g_cRespawnTimeSecs.IntValue - 1);
+	data.WriteCell(GetClientUserId(client));
+	if (!instant_revive)
+	{
+		// Print the initial message instantly for a more responsive feel
+		PrintCenterText(client, RESPAWN_PHRASE, g_cRespawnTimeSecs.IntValue);
+	}
+}
+
+public Action Timer_Revive(Handle timer, DataPack data)
 {
 	data.Reset();
 	int respawn_secs = data.ReadCell();
 	int client = GetClientOfUserId(data.ReadCell());
-	char weapon[32];
-	data.ReadString(weapon, sizeof(weapon));
 
-	if (client == 0)
+	if (client == 0 ||
+		!(DeadTools_GetClientFlags(client) & DEADTOOLS_FLAG_DOWN))
 	{
 		return Plugin_Stop;
 	}
@@ -370,128 +138,7 @@ public Action Timer_DeferFakeDeath(Handle timer, DataPack data)
 	}
 	PrintCenterText(client, ""); // clear any lingering "RESPAWNING..." text
 
-	g_bIsWaitingToRespawn[client] = false;
-
-	// Places the NT player in the world
-	// TODO: figure out what this is
-	static Handle call = INVALID_HANDLE;
-	if (call == INVALID_HANDLE)
-	{
-		StartPrepSDKCall(SDKCall_Player);
-		PrepSDKCall_SetSignature(SDKLibrary_Server,
-			"\x56\x8B\xF1\x8B\x06\x8B\x90\xBC\x04\x00\x00\x57\xFF\xD2\x8B\x06",
-			16
-		);
-		call = EndPrepSDKCall();
-		if (call == INVALID_HANDLE)
-		{
-			ThrowError("Failed to prepare SDK call");
-		}
-	}
-	SDKCall(call, client);
-
-	SetEntProp(client, Prop_Send, "m_iObserverMode", OBS_MODE_NONE);
-	SetEntProp(client, Prop_Send, "m_iHealth", 100);
-	SetEntProp(client, Prop_Send, "m_lifeState", LIFE_ALIVE);
-	SetEntProp(client, Prop_Send, "deadflag", 0);
-	SetEntPropFloat(client, Prop_Send, "m_flDeathTime", 0.0);
-	SetEntProp(client, Prop_Send, "m_bDucked", false);
-	SetEntProp(client, Prop_Send, "m_bDucking", false);
-	SetEntProp(client, Prop_Send, "m_bDrawViewmodel", true);
-	SetEntProp(client, Prop_Send, "m_nRenderFX", 0);
-	SetEntPropFloat(client, Prop_Send, "m_flNextAttack", GetGameTime());
-	SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", 0.0);
-	SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
-	SetEntProp(client, Prop_Send, "m_nSolidType", SOLID_BBOX);
-	SetEntProp(client, Prop_Data, "m_fInitHUD", 1);
-	SetEntPropFloat(client, Prop_Data, "m_DmgTake", 0.0);
-	SetEntPropFloat(client, Prop_Data, "m_DmgSave", 0.0);
-	SetEntProp(client, Prop_Data, "m_afPhysicsFlags", 0);
-	SetEntProp(client, Prop_Data, "m_bitsDamageType", 0);
-	SetEntProp(client, Prop_Data, "m_bitsHUDDamage", -1);
-	SetEntProp(client, Prop_Data, "m_takedamage", DAMAGE_YES);
-	SetEntityMoveType(client, MOVETYPE_WALK);
-	// declaring as variables for older sm compat
-	float campvsorigin[3];
-	float hackedgunpos[3] = { 0.0, 32.0, 0.0 };
-	SetEntPropVector(client, Prop_Data, "m_vecCameraPVSOrigin", campvsorigin);
-	SetEntPropVector(client, Prop_Data, "m_HackedGunPos", hackedgunpos);
-	SetEntProp(client, Prop_Data, "m_bPlayerUnderwater", false);
-	SetEntProp(client, Prop_Data, "m_iTrain", TRAIN_NEW);
-
-	SetInvisible(client, false);
-	SetEntityFlags(client, GetEntityFlags(client) & ~FL_GODMODE);
-	ChangeEdictState(client, 0);
-
-	GivePlayerEquipment(client);
+	DeadTools_Revive(client);
 
 	return Plugin_Stop;
-}
-
-void GivePlayerEquipment(int client)
-{
-	static Handle call = INVALID_HANDLE;
-	if (call == INVALID_HANDLE)
-	{
-		StartPrepSDKCall(SDKCall_Player);
-		PrepSDKCall_SetSignature(SDKLibrary_Server,
-			"\x83\xEC\x1C\x56\x8B\xF1\x8B\x86\xC0\x09\x00\x00", 12
-		);
-		call = EndPrepSDKCall();
-		if (call == INVALID_HANDLE)
-		{
-			ThrowError("Failed to prepare SDK call");
-		}
-	}
-	SDKCall(call, client);
-}
-
-void CreateFakeDeathEvent(int victim_userid, int attacker_userid=0,
-	const char[] weapon="world", int icon=0)
-{
-	Event event = CreateEvent("player_death", true);
-	if (event == null)
-	{
-		ThrowError("Failed to create event");
-	}
-
-	event.SetInt("userid", victim_userid);
-	event.SetInt("attacker", attacker_userid);
-	event.SetString("weapon", weapon);
-	event.SetInt("icon", icon);
-
-	event.Fire();
-}
-
-// TODO: support gibbing
-void CreateRagdoll(int client)
-{
-	if (client < 0 || client >= MaxClients)
-	{
-		ThrowError("Invalid client index: %d", client);
-	}
-	if (!IsClientInGame(client))
-	{
-		ThrowError("Client is not in game: %d", client);
-	}
-
-	int team = GetClientTeam(client);
-	if (team != TEAM_JINRAI && team != TEAM_NSF)
-	{
-		ThrowError("Unexpected team %d", team);
-	}
-
-	static Handle call = INVALID_HANDLE;
-	if (call == INVALID_HANDLE)
-	{
-		StartPrepSDKCall(SDKCall_Player);
-		PrepSDKCall_SetSignature(SDKLibrary_Server,
-			"\x53\x56\x57\x8B\xF9\x8B\x87\x1C\x0E\x00\x00", 11);
-		call = EndPrepSDKCall();
-		if (call == INVALID_HANDLE)
-		{
-			ThrowError("Failed to prepare SDK call");
-		}
-	}
-	SDKCall(call, client);
 }
