@@ -7,8 +7,9 @@
 #if defined(FLATTEN_INCLUDE_PATHS)
 #include "nt_deadtools_natives"
 #else
-// If you're compiling using Spider or other in-browser compiler,
-// and these include paths are failing, un-comment the FLATTEN_INCLUDE_PATHS compile flag above.
+// If you're compiling using Spider orother in-browser compiler,
+// and these include paths are failing, un-comment the FLATTEN_INCLUDE_PATHS
+// compile flag above.
 #include "nt_deadtools/nt_deadtools_natives"
 #endif
 
@@ -21,7 +22,7 @@ ConVar g_cRespawnTimeSecs;
 static bool g_bLateLoad;
 static int g_iOldClientDeadToolsBits[NEO_MAXPLAYERS + 1];
 
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.0.1"
 
 // Remember to update all format calls if you change this
 #define RESPAWN_PHRASE "— RESPAWNING IN %d —"
@@ -34,7 +35,8 @@ public Plugin myinfo = {
 	url = "https://github.com/Rainyan/sourcemod-nt-respawns"
 };
 
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error,
+	int err_max)
 {
 	g_bLateLoad = late;
 	return APLRes_Success;
@@ -45,7 +47,7 @@ public void OnPluginStart()
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
 		"How many seconds until players will respawn", _, true, 0.0);
 
-	if (!HookEventEx("player_death", OnPlayerDeath))
+	if (!HookEventEx("player_death", OnPlayerDeath, EventHookMode_Pre))
 	{
 		SetFailState("Failed to hook event");
 	}
