@@ -22,7 +22,7 @@ public Plugin myinfo = {
 	description = "Respawning for Neotokyo CTG mode",
 	author = "Rain",
 	version = PLUGIN_VERSION,
-	url = "https://github.com/Rainyan/sourcemod-nt-deadtools"
+	url = "https://github.com/Rainyan/sourcemod-nt-respawns"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
