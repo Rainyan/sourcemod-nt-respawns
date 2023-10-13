@@ -47,9 +47,6 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 		return;
 	}
 
-	char weapon[32];
-	event.GetString("weapon", weapon, sizeof(weapon), "world");
-
 	// So we can skip the "Respawning..." screen print stuff on <1 sec respawns
 	bool instant_revive = (g_cRespawnTimeSecs.FloatValue < 1);
 
@@ -60,7 +57,6 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 	// -1 because we've already waited once here until the first print callback
 	data.WriteCell(instant_revive ? 0 : g_cRespawnTimeSecs.IntValue - 1);
 	data.WriteCell(GetClientUserId(client));
-	data.WriteString(weapon);
 	if (!instant_revive)
 	{
 		// Print the initial message instantly for a more responsive feel
