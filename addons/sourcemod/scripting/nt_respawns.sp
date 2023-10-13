@@ -25,7 +25,7 @@ public Plugin myinfo = {
 public void OnPluginStart()
 {
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
-		"How many seconds until players will respawn", _, true, 1.0);
+		"How many seconds until players will respawn", _, true, 0.0);
 
 	if (!HookEventEx("player_death", OnPlayerDeath, EventHookMode_PostNoCopy))
 	{
@@ -49,15 +49,21 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 	char weapon[32];
 	event.GetString("weapon", weapon, sizeof(weapon), "world");
 
+	// So we can skip the "Respawning..." screen print stuff on <1 sec respawns
+	bool instant_revive = (g_cRespawnTimeSecs.FloatValue < 1);
+
 	DataPack data;
-	CreateDataTimer(1.0, Timer_Revive, data,
+	CreateDataTimer(instant_revive ? 0.1 : 1.0, Timer_Revive, data,
 		TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-	// -1 because we've already waited once here until the first callback
-	data.WriteCell(g_cRespawnTimeSecs.IntValue - 1);
+	// -1 because we've already waited once here until the first print callback
+	data.WriteCell(instant_revive ? 0 : g_cRespawnTimeSecs.IntValue - 1);
 	data.WriteCell(GetClientUserId(client));
 	data.WriteString(weapon);
-	// Print the initial message instantly for a more responsive feel
-	PrintCenterText(client, RESPAWN_PHRASE, g_cRespawnTimeSecs.IntValue);
+	if (!instant_revive)
+	{
+		// Print the initial message instantly for a more responsive feel
+		PrintCenterText(client, RESPAWN_PHRASE, g_cRespawnTimeSecs.IntValue);
+	}
 }
 
 public Action Timer_Revive(Handle timer, DataPack data)
