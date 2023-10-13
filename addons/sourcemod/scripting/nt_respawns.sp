@@ -10,6 +10,7 @@
 ConVar g_cRespawnTimeSecs;
 
 static bool g_bLateLoad;
+static int g_iOldClientDeadToolsBits[NEO_MAXPLAYERS + 1];
 
 #define PLUGIN_VERSION "1.0.0"
 
@@ -41,30 +42,50 @@ public void OnPluginStart()
 	}
 }
 
-public void OnClientPutInServer(int client)
-{
-	DeadTools_SetIsDownable(client, true);
-}
-
-public void OnClientDisconnect_Post(int client)
-{
-	DeadTools_SetIsDownable(client, false);
-}
-
 public void OnAllPluginsLoaded()
 {
 	DeadTools_VerifyApiVersion();
 
-	if (g_bLateLoad)
+	for (int client = 1; client <= MaxClients; ++client)
 	{
-		for (int client = 1; client <= MaxClients; ++client)
+		if (!IsClientInGame(client))
+		{
+			continue;
+		}
+		g_iOldClientDeadToolsBits[client] = DeadTools_GetClientFlags(client);
+		if (g_bLateLoad)
+		{
+			DeadTools_SetIsDownable(client, true);
+		}
+	}
+}
+
+public void OnPluginEnd()
+{
+	// TODO: This is kind of awkward and really we should rework the base
+	// DeadTools plugin design to take care of all of this automagically.
+	// But for now, this boilerplate is kind of required.
+	for (int client = 1; client <= MaxClients; ++client)
+	{
+		// This is required for now, because if we unload early after having
+		// declared this client "downable", they might end up with no plugin
+		// to handle that custom state, leaving the player in limbo.
+		//
+		// If the client was already declared as having the "downable" bits
+		// before we loaded, don't step on the toes of other plugins using it.
+		if (!(g_iOldClientDeadToolsBits[client] & DEADTOOLS_FLAG_DOWNABLE))
 		{
 			if (IsClientInGame(client))
 			{
-				DeadTools_SetIsDownable(client, true);
+				DeadTools_SetIsDownable(client, false);
 			}
 		}
 	}
+}
+
+public void OnClientPutInServer(int client)
+{
+	DeadTools_SetIsDownable(client, true);
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
