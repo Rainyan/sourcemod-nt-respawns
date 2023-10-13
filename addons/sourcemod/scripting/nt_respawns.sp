@@ -41,7 +41,8 @@ public void OnAllPluginsLoaded()
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (client == 0)
+	if (client == 0 ||
+		!(DeadTools_GetClientFlags(client) & DEADTOOLS_FLAG_DOWN))
 	{
 		return;
 	}
