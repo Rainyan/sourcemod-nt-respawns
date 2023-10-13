@@ -52,6 +52,7 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 	// So we can skip the "Respawning..." screen print stuff on <1 sec respawns
 	bool instant_revive = (g_cRespawnTimeSecs.FloatValue < 1);
 
+	// TODO: do we have to defer the revive here?? if not, could just call directly
 	DataPack data;
 	CreateDataTimer(instant_revive ? 0.1 : 1.0, Timer_Revive, data,
 		TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
