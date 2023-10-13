@@ -9,6 +9,8 @@
 
 ConVar g_cRespawnTimeSecs;
 
+static bool g_bLateLoad;
+
 #define PLUGIN_VERSION "1.0.0"
 
 // Remember to update all format calls if you change this
@@ -22,20 +24,47 @@ public Plugin myinfo = {
 	url = "https://github.com/Rainyan/sourcemod-nt-deadtools"
 };
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	g_bLateLoad = late;
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	g_cRespawnTimeSecs = CreateConVar("sm_nt_respawn_time_seconds", "5",
 		"How many seconds until players will respawn", _, true, 0.0);
 
-	if (!HookEventEx("player_death", OnPlayerDeath, EventHookMode_PostNoCopy))
+	if (!HookEventEx("player_death", OnPlayerDeath))
 	{
 		SetFailState("Failed to hook event");
 	}
 }
 
+public void OnClientPutInServer(int client)
+{
+	DeadTools_SetIsDownable(client, true);
+}
+
+public void OnClientDisconnect_Post(int client)
+{
+	DeadTools_SetIsDownable(client, false);
+}
+
 public void OnAllPluginsLoaded()
 {
 	DeadTools_VerifyApiVersion();
+
+	if (g_bLateLoad)
+	{
+		for (int client = 1; client <= MaxClients; ++client)
+		{
+			if (IsClientInGame(client))
+			{
+				DeadTools_SetIsDownable(client, true);
+			}
+		}
+	}
 }
 
 public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
